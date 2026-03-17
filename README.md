@@ -1,7 +1,7 @@
 Rollercoin → RollercoinCalculator Prefill Extension
 
 What it does
-- Adds a floating "Open Calculator" button on pages matching https://rollercoin.com/p/*.
+- Adds a floating "Open Calculator" button to bottom right corner on pages matching https://rollercoin.com/p/*.
 - When clicked it opens https://rollercoincalculator.app/en/ in a new tab and passes the identifier (the path segment after /p/) in the `prefill` query parameter.
 - On the calculator site the extension reads `?prefill=...` and fills the first element with class `power-value-input` with that value.
 

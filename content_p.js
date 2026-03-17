@@ -1,34 +1,37 @@
 (function(){
-  const BUTTON_ID = 'rc-open-calculator-btn';
+  // Stealthy button: no global IDs or dataset; use a closed ShadowRoot so page scripts can't access it.
+  let hostEl = null;
+  let shadowBtn = null;
+  const codeMap = new WeakMap();
+  let lastPath = location.pathname;
 
-  function createButton(code){
-    let btn = document.getElementById(BUTTON_ID);
-    if(btn) {
-      btn.dataset.code = code;
-      return btn;
-    }
-    btn = document.createElement('button');
-    btn.id = BUTTON_ID;
-    btn.dataset.code = code;
+  function makeHostAndButton(code){
+    if(!document.body) return null;
+    if(hostEl) return shadowBtn;
+
+    hostEl = document.createElement('div');
+    hostEl.setAttribute('aria-hidden', 'true');
+    // keep host visually inert
+    hostEl.style.position = 'static';
+    hostEl.style.width = '0';
+    hostEl.style.height = '0';
+
+    const shadow = hostEl.attachShadow({mode: 'closed'});
+    const wrapper = document.createElement('div');
+    const style = document.createElement('style');
+    style.textContent = '\n  .__rc_wrapper{position:fixed;bottom:16px;right:16px;z-index:2147483647}\n  .__rc_btn{padding:8px 12px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3)}\n';
+    const btn = document.createElement('button');
+    btn.className = '__rc_btn';
     btn.textContent = 'Open Calculator';
-    Object.assign(btn.style, {
-      position: 'fixed',
-      bottom: '16px',
-      right: '16px',
-      zIndex: 2147483647,
-      padding: '8px 12px',
-      background: '#1976d2',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
-    });
+    const container = document.createElement('div');
+    container.className = '__rc_wrapper';
+    container.appendChild(btn);
+    shadow.appendChild(style);
+    shadow.appendChild(container);
 
     btn.addEventListener('click', function(){
-      const code = btn.dataset.code || '';
+      const code = codeMap.get(btn) || '';
       const url = 'https://rollercoincalculator.app/en/?prefill=' + encodeURIComponent(code);
-      // Save prefill into chrome.storage so the calculator page can read it reliably
       try{
         if(window.chrome && chrome.storage && chrome.storage.local){
           chrome.storage.local.set({rc_prefill: code, rc_prefill_ts: Date.now()}, function(){
@@ -36,59 +39,52 @@
           });
           return;
         }
-      }catch(e){ /* fallthrough */ }
-      // Fallback: just open URL with query param
+      }catch(e){ }
       window.open(url, '_blank');
     });
 
-    document.body.appendChild(btn);
+    shadowBtn = btn;
+    codeMap.set(btn, code || '');
+    document.body.appendChild(hostEl);
     return btn;
   }
 
-  function removeButton(){
-    const btn = document.getElementById(BUTTON_ID);
-    if(btn && btn.parentNode) btn.parentNode.removeChild(btn);
+  function removeHost(){
+    if(hostEl && hostEl.parentNode) hostEl.parentNode.removeChild(hostEl);
+    hostEl = null;
+    shadowBtn = null;
   }
 
   function ensureButtonForLocation(){
     const m = location.pathname.match(/\/p\/([^\/]+)/);
     if(m){
       const code = m[1];
-      // ensure body exists
-      if(!document.body){
-        setTimeout(ensureButtonForLocation, 50);
-        return;
-      }
-      createButton(code);
+      if(!document.body){ return; }
+      const btn = makeHostAndButton(code);
+      if(btn) codeMap.set(btn, code);
     } else {
-      removeButton();
+      removeHost();
     }
   }
 
-  // Detect SPA navigations by wrapping pushState/replaceState and listening to popstate
-  (function(history){
-    if(!history) return;
-    const push = history.pushState;
-    const replace = history.replaceState;
-    history.pushState = function(){
-      const ret = push.apply(this, arguments);
-      window.dispatchEvent(new Event('locationchange'));
-      return ret;
-    };
-    history.replaceState = function(){
-      const ret = replace.apply(this, arguments);
-      window.dispatchEvent(new Event('locationchange'));
-      return ret;
-    };
-    window.addEventListener('popstate', () => window.dispatchEvent(new Event('locationchange')));
-  })(window.history);
+  // Use popstate + polling instead of wrapping history functions to avoid detection
+  window.addEventListener('popstate', () => {
+    ensureButtonForLocation();
+    lastPath = location.pathname;
+  });
 
-  // Observe DOM changes in case body appears later (single-page apps)
-  const mo = new MutationObserver(() => ensureButtonForLocation());
-  mo.observe(document.documentElement || document, {childList: true, subtree: true});
+  // Poll for SPA path changes (low-frequency, less invasive)
+  setInterval(()=>{
+    if(location.pathname !== lastPath){
+      lastPath = location.pathname;
+      ensureButtonForLocation();
+    }
+  }, 300);
 
-  window.addEventListener('locationchange', ensureButtonForLocation);
-
-  // Initial run
-  ensureButtonForLocation();
+  // Ensure body exists, then initial run
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ensureButtonForLocation, {once:true});
+  } else {
+    ensureButtonForLocation();
+  }
 })();

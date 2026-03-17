@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Rollercoin Prefill Button",
+  "version": "1.0",
+  "description": "Adds a button on rollercoin /p/* pages to open rollercoincalculator.app and prefill the power input.",
+  "content_scripts": [
+    {
+      "matches": ["*://rollercoin.com/p/*", "*://www.rollercoin.com/p/*"],
+      "js": ["content_p.js"]
+    },
+    {
+      "matches": ["*://rollercoincalculator.app/en/*", "*://www.rollercoincalculator.app/en/*"],
+      "js": ["content_calc.js"]
+    }
+  ],
+  "host_permissions": [
+    "*://rollercoin.com/*",
+    "*://rollercoincalculator.app/*"
+  ]
+  ,
+  "permissions": [
+    "storage"
+  ]
+}
